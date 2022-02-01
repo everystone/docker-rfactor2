@@ -12,6 +12,10 @@
 
 FROM ubuntu:latest
 
+ENV TZ=Europe/Oslo
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+
+
 RUN apt-get update -y
 RUN apt-get install -y openssh-server xdm xvfb jwm sudo xterm cabextract rox-filer x11vnc links
 
@@ -21,23 +25,43 @@ RUN apt-get update -y \
 	&& apt-get install -y --no-install-recommends \
 		curl \
 		unzip \
-		software-properties-common \
-	&& add-apt-repository ppa:ubuntu-wine/ppa
+		software-properties-common
+
+
+# steam cmd
+RUN sudo add-apt-repository multiverse
+RUN sudo dpkg --add-architecture i386
+RUN  sudo apt update
+
+RUN echo steam steam/license note '' | debconf-set-selections && \
+    echo steam steam/question select 'I AGREE' | debconf-set-selections && \
+    apt-get install --yes --install-recommends \
+      steamcmd
+
+#RUN wget https://dl.winehq.org/wine-builds/Release.key
+#RUN apt-key add Release.key
+#RUN apt-add-repository 'https://dl.winehq.org/wine-builds/ubuntu/'
 
 # Install wine and related packages
 # Define which versions we need
-ENV WINE_MONO_VERSION 4.5.6
-ENV WINE_GECKO_VERSION 2.40
+#ENV WINE_MONO_VERSION 4.5.6
+#ENV WINE_GECKO_VERSION 2.40
 
-RUN dpkg --add-architecture i386 \
-	&& apt-get update -y \
-	&& apt-get install -y --no-install-recommends \
-		wine1.7 \
-		wine-gecko$WINE_GECKO_VERSION:i386 \
-		wine-gecko$WINE_GECKO_VERSION:amd64 \
-		wine-mono$WINE_MONO_VERSION \
-	&& rm -rf /var/lib/apt/lists/*
-
+#RUN dpkg --add-architecture i386 \
+#	&& apt-get update -y \
+#	&& apt-get install -y --no-install-recommends \
+#		wine1.7 \
+#		wine-gecko$WINE_GECKO_VERSION:i386 \
+#		wine-gecko$WINE_GECKO_VERSION:amd64 \
+#		wine-mono$WINE_MONO_VERSION \
+#	&& rm -rf /var/lib/apt/lists/*
+# install latest wine
+RUN wget -qO- https://dl.winehq.org/wine-builds/Release.key | sudo apt-key add -
+RUN sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv F987672F
+RUN sudo apt-add-repository 'deb https://dl.winehq.org/wine-builds/ubuntu/ bionic main'
+RUN apt-get update
+RUN sudo apt-get install --install-recommends wine-stable-amd64 -y
+RUN sudo apt-get install --install-recommends wine-stable winehq-stable -y
 
 # Use the latest version of winetricks
 RUN curl -SL 'https://raw.githubusercontent.com/Winetricks/winetricks/master/src/winetricks' -o /usr/local/bin/winetricks \
@@ -76,6 +100,18 @@ EXPOSE 5900
 # Create the directory needed to run the sshd daemon
 RUN mkdir /var/run/sshd 
 
+# Download rFactor2 Lite Build 1036
+#RUN cd /home/docker && wget http://www.mediafire.com/download/xdqvbzredm3z9z5/rFactor2_LiteBuild_1036.exe
+#RUN cd /home/docker && wget http://media.steampowered.com/installer/steamcmd.zip
+#run ls -l
+#RUN unzip steamcmd.zip
+#RUN ls
+#RUN apt-get install steamcmd
+#RUN sudo su - steam
+RUN /usr/games/steamcmd +@sSteamCmdForcePlatformType windows +login anonymous +force_install_dir /usr/local/rf2 +app_update 400300 +quit
+#RUN chown docker:docker /home/docker/*.exe
+RUN ls
+
 # Add docker user and generate a random password with 12 characters that includes at least one capital letter and number.
 RUN useradd -m -d /home/docker  docker
 #TODO password is docker, change it
@@ -99,9 +135,7 @@ RUN echo '#!/bin/bash \n cd /home/docker/.wine/drive_c/Program\ Files*86*/rFacto
 RUN chmod +x /home/docker/runrf2.sh
 RUN chown docker:docker /home/docker/runrf2.sh
 
-# Download rFactor2 Lite Build 1036
-RUN cd /home/docker && wget http://www.mediafire.com/download/xdqvbzredm3z9z5/rFactor2_LiteBuild_1036.exe
-RUN chown docker:docker /home/docker/*.exe
+
 
 # Start xdm and ssh services.
 CMD ["/bin/bash", "/src/startup.sh"]
